@@ -1,0 +1,648 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESP32 Biomedical Monitor</title>
+
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: #263238;
+      background:
+        radial-gradient(circle at 10% 0%, rgba(33,150,243,.18), transparent 28%),
+        radial-gradient(circle at 90% 10%, rgba(126,87,194,.16), transparent 28%),
+        linear-gradient(135deg, #eef7ff 0%, #f8f4ff 50%, #f2fbf8 100%);
+      min-height: 100vh;
+      padding: 20px;
+    }
+
+    .page {
+      max-width: 1100px;
+      margin: auto;
+    }
+
+    .hero {
+      color: white;
+      border-radius: 24px;
+      padding: 28px;
+      background: linear-gradient(135deg, #1976d2, #3949ab 55%, #7e57c2);
+      box-shadow: 0 15px 40px rgba(48,63,159,.20);
+      margin-bottom: 18px;
+    }
+
+    .hero-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 15px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 27px;
+    }
+
+    .subtitle {
+      margin-top: 8px;
+      color: rgba(255,255,255,.86);
+      font-size: 14px;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.16);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #9e9e9e;
+    }
+
+    .dot.live {
+      background: #69f0ae;
+      box-shadow: 0 0 10px rgba(105,240,174,.8);
+    }
+
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 18px;
+    }
+
+    .card, .panel {
+      background: rgba(255,255,255,.96);
+      border-radius: 18px;
+      border: 1px solid rgba(220,228,238,.9);
+      box-shadow: 0 8px 24px rgba(30,50,80,.08);
+    }
+
+    .card {
+      padding: 20px;
+    }
+
+    .card-label {
+      color: #78909c;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .metric {
+      margin-top: 8px;
+      font-size: 34px;
+      font-weight: 800;
+      color: #263238;
+    }
+
+    .unit {
+      font-size: 14px;
+      color: #78909c;
+      font-weight: 600;
+    }
+
+    .range {
+      margin-top: 8px;
+      color: #90a4ae;
+      font-size: 12px;
+    }
+
+    .panel {
+      padding: 20px;
+      margin-bottom: 18px;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .panel-title {
+      font-size: 17px;
+      font-weight: 800;
+    }
+
+    .panel-subtitle {
+      color: #90a4ae;
+      font-size: 12px;
+      margin-top: 4px;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    select, button {
+      border: 1px solid #d8e0e8;
+      border-radius: 9px;
+      padding: 9px 11px;
+      background: white;
+      color: #455a64;
+      font-size: 13px;
+    }
+
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      background: #2196f3;
+      color: white;
+      border-color: #2196f3;
+    }
+
+    button:hover {
+      background: #1976d2;
+    }
+
+    canvas {
+      width: 100%;
+      height: 260px;
+      display: block;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      text-align: left;
+      color: #607d8b;
+      background: #f5f8fb;
+      padding: 11px;
+    }
+
+    td {
+      padding: 11px;
+      border-top: 1px solid #edf1f5;
+    }
+
+    .empty {
+      padding: 35px 10px;
+      text-align: center;
+      color: #90a4ae;
+    }
+
+    .ecg-panel {
+      display: none;
+    }
+
+    .footer {
+      text-align: center;
+      color: #90a4ae;
+      font-size: 11px;
+      padding: 4px 0 20px;
+    }
+
+    @media (max-width: 750px) {
+      body { padding: 10px; }
+      .hero-top { flex-direction: column; align-items: flex-start; }
+      .cards { grid-template-columns: 1fr; }
+      .panel-head { flex-direction: column; align-items: flex-start; }
+      .controls { width: 100%; }
+      select, button { flex: 1; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="page">
+
+  <section class="hero">
+    <div class="hero-top">
+      <div>
+        <h1>🫀 ESP32 Biomedical Monitor</h1>
+        <div class="subtitle">
+          Live data dashboard from Google Sheets
+        </div>
+      </div>
+
+      <div class="status">
+        <span id="statusDot" class="dot"></span>
+        <span id="statusText">Loading...</span>
+      </div>
+    </div>
+  </section>
+
+  <section class="cards">
+    <div class="card">
+      <div class="card-label">❤️ HEART RATE</div>
+      <div class="metric">
+        <span id="hrValue">--</span>
+        <span class="unit">BPM</span>
+      </div>
+      <div class="range" id="hrRange">No data</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">🫁 OXYGEN SATURATION</div>
+      <div class="metric">
+        <span id="spo2Value">--</span>
+        <span class="unit">%</span>
+      </div>
+      <div class="range" id="spo2Range">No data</div>
+    </div>
+
+    <div class="card">
+      <div class="card-label">⏱️ RR INTERVAL</div>
+      <div class="metric">
+        <span id="rrValue">--</span>
+        <span class="unit">ms</span>
+      </div>
+      <div class="range" id="rrRange">No data</div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Vital Signs Trends</div>
+        <div class="panel-subtitle" id="lastUpdated">Waiting for data...</div>
+      </div>
+
+      <div class="controls">
+        <select id="rangeSelect" onchange="loadData()">
+          <option value="20">Last 20 readings</option>
+          <option value="50" selected>Last 50 readings</option>
+          <option value="100">Last 100 readings</option>
+          <option value="200">Last 200 readings</option>
+        </select>
+        <button onclick="loadData()">↻ Refresh</button>
+      </div>
+    </div>
+
+    <canvas id="vitalsChart"></canvas>
+  </section>
+
+  <section class="panel ecg-panel" id="ecgPanel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">📈 ECG Signal</div>
+        <div class="panel-subtitle">Latest samples from the ECG sheet</div>
+      </div>
+    </div>
+    <canvas id="ecgChart"></canvas>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <div class="panel-title">Recent Measurements</div>
+        <div class="panel-subtitle">Newest records first</div>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Heart Rate</th>
+            <th>SpO2</th>
+            <th>RR</th>
+          </tr>
+        </thead>
+        <tbody id="dataTable"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <div class="footer">
+    ESP32-S3 Biomedical IoT • Data source: Google Sheets
+  </div>
+</div>
+
+<script>
+  let latestData = null;
+
+  function loadData() {
+    setStatus("Loading...", false);
+
+    google.script.run
+      .withSuccessHandler(function(data) {
+        latestData = data;
+        renderDashboard(data);
+        setStatus("Live", true);
+      })
+      .withFailureHandler(function(error) {
+        console.error(error);
+        setStatus("Connection error", false);
+      })
+      .getDashboardData();
+  }
+
+  function setStatus(text, live) {
+    document.getElementById("statusText").textContent = text;
+    document.getElementById("statusDot").className = live ? "dot live" : "dot";
+  }
+
+  function selectedVitals(data) {
+    const limit = Number(document.getElementById("rangeSelect").value) || 50;
+    return data.vitals.slice(-limit);
+  }
+
+  function validNumbers(values) {
+    return values.filter(v => typeof v === "number" && Number.isFinite(v));
+  }
+
+  function stats(values) {
+    const v = validNumbers(values);
+    if (!v.length) return null;
+
+    return {
+      min: Math.min(...v),
+      max: Math.max(...v)
+    };
+  }
+
+  function renderDashboard(data) {
+    const vitals = selectedVitals(data);
+
+    if (!vitals.length) {
+      document.getElementById("hrValue").textContent = "--";
+      document.getElementById("spo2Value").textContent = "--";
+      document.getElementById("rrValue").textContent = "--";
+      document.getElementById("dataTable").innerHTML =
+        '<tr><td colspan="4" class="empty">No measurements have been saved yet.</td></tr>';
+      drawEmpty("vitalsChart", "No vital-sign data available");
+      return;
+    }
+
+    const latest = vitals[vitals.length - 1];
+
+    document.getElementById("hrValue").textContent =
+      latest.heartRate == null ? "--" : Math.round(latest.heartRate);
+
+    document.getElementById("spo2Value").textContent =
+      latest.spo2 == null ? "--" : latest.spo2.toFixed(1);
+
+    document.getElementById("rrValue").textContent =
+      latest.rr == null ? "--" : Math.round(latest.rr);
+
+    const hr = stats(vitals.map(x => x.heartRate));
+    const spo2 = stats(vitals.map(x => x.spo2));
+    const rr = stats(vitals.map(x => x.rr));
+
+    document.getElementById("hrRange").textContent =
+      hr ? `Range: ${Math.round(hr.min)}–${Math.round(hr.max)} BPM` : "No data";
+
+    document.getElementById("spo2Range").textContent =
+      spo2 ? `Range: ${spo2.min.toFixed(1)}–${spo2.max.toFixed(1)} %` : "No data";
+
+    document.getElementById("rrRange").textContent =
+      rr ? `Range: ${Math.round(rr.min)}–${Math.round(rr.max)} ms` : "No data";
+
+    document.getElementById("lastUpdated").textContent =
+      "Last reading: " + formatTime(latest.timestamp);
+
+    drawVitalsChart(vitals);
+    renderTable(vitals);
+
+    if (data.ecg && data.ecg.length) {
+      document.getElementById("ecgPanel").style.display = "block";
+      drawECGChart(data.ecg);
+    }
+  }
+
+  function renderTable(vitals) {
+    const newestFirst = [...vitals].reverse();
+
+    document.getElementById("dataTable").innerHTML = newestFirst
+      .slice(0, 15)
+      .map(row => `
+        <tr>
+          <td>${escapeHtml(formatTime(row.timestamp))}</td>
+          <td>${row.heartRate == null ? "--" : Math.round(row.heartRate) + " BPM"}</td>
+          <td>${row.spo2 == null ? "--" : row.spo2.toFixed(1) + " %"}</td>
+          <td>${row.rr == null ? "--" : Math.round(row.rr) + " ms"}</td>
+        </tr>
+      `)
+      .join("");
+  }
+
+  function drawVitalsChart(rows) {
+    const canvas = document.getElementById("vitalsChart");
+    const ctx = prepareCanvas(canvas);
+
+    const w = canvas.width;
+    const h = canvas.height;
+    const pad = {left:45, right:18, top:20, bottom:35};
+
+    ctx.font = "11px Arial";
+    ctx.lineWidth = 1;
+
+    const series = [
+      {
+        name:"HR",
+        key:"heartRate",
+        unit:"BPM",
+        color:"#1976d2",
+        min:40,
+        max:120
+      },
+      {
+        name:"SpO2",
+        key:"spo2",
+        unit:"%",
+        color:"#e53935",
+        min:90,
+        max:100
+      },
+      {
+        name:"RR",
+        key:"rr",
+        unit:"ms",
+        color:"#7e57c2",
+        min:500,
+        max:1100
+      }
+    ];
+
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+
+    ctx.strokeStyle = "#e8edf2";
+    ctx.fillStyle = "#78909c";
+
+    for (let i = 0; i <= 4; i++) {
+      const y = pad.top + plotH * i / 4;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+    }
+
+    const x = i => pad.left + (rows.length <= 1 ? plotW / 2 : i * plotW / (rows.length - 1));
+
+    series.forEach(s => {
+      ctx.strokeStyle = s.color;
+      ctx.lineWidth = 2.3;
+      ctx.beginPath();
+
+      let started = false;
+
+      rows.forEach((row, i) => {
+        const value = Number(row[s.key]);
+        if (!Number.isFinite(value)) return;
+
+        const normalized = Math.max(0, Math.min(1, (value - s.min) / (s.max - s.min)));
+        const y = pad.top + plotH * (1 - normalized);
+
+        if (!started) {
+          ctx.moveTo(x(i), y);
+          started = true;
+        } else {
+          ctx.lineTo(x(i), y);
+        }
+      });
+
+      ctx.stroke();
+    });
+
+    // Legend
+    let legendX = pad.left;
+    series.forEach(s => {
+      ctx.fillStyle = s.color;
+      ctx.fillRect(legendX, 4, 12, 3);
+      ctx.fillStyle = "#607d8b";
+      ctx.fillText(s.name, legendX + 17, 9);
+      legendX += 55;
+    });
+
+    ctx.fillStyle = "#90a4ae";
+    ctx.fillText("Older", pad.left, h - 8);
+    ctx.fillText("Latest", w - 45, h - 8);
+  }
+
+  function drawECGChart(rows) {
+    const canvas = document.getElementById("ecgChart");
+    const ctx = prepareCanvas(canvas);
+    const w = canvas.width;
+    const h = canvas.height;
+    const pad = {left:35, right:15, top:15, bottom:25};
+
+    const values = rows.map(r => Number(r.value)).filter(Number.isFinite);
+
+    if (!values.length) {
+      drawEmpty("ecgChart", "No ECG data available");
+      return;
+    }
+
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const span = max - min || 1;
+    const plotW = w - pad.left - pad.right;
+    const plotH = h - pad.top - pad.bottom;
+
+    ctx.strokeStyle = "#e7edf2";
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= 5; i++) {
+      const y = pad.top + plotH * i / 5;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+    }
+
+    ctx.strokeStyle = "#00897b";
+    ctx.lineWidth = 1.8;
+    ctx.beginPath();
+
+    values.forEach((value, i) => {
+      const x = pad.left + i * plotW / Math.max(1, values.length - 1);
+      const y = pad.top + plotH * (1 - (value - min) / span);
+
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+
+    ctx.stroke();
+  }
+
+  function prepareCanvas(canvas) {
+    const ratio = window.devicePixelRatio || 1;
+    const rect = canvas.getBoundingClientRect();
+
+    canvas.width = Math.max(300, Math.floor(rect.width * ratio));
+    canvas.height = Math.max(220, Math.floor(rect.height * ratio));
+
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    // Work in CSS pixels after scaling.
+    canvas.width = Math.max(300, Math.floor(rect.width * ratio));
+    canvas.height = Math.max(220, Math.floor(rect.height * ratio));
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+
+    // Return a context whose coordinate system is CSS pixels.
+    return ctx;
+  }
+
+  function drawEmpty(id, message) {
+    const canvas = document.getElementById(id);
+    const ctx = prepareCanvas(canvas);
+    const rect = canvas.getBoundingClientRect();
+
+    ctx.fillStyle = "#90a4ae";
+    ctx.font = "14px Arial";
+    ctx.textAlign = "center";
+    ctx.fillText(message, rect.width / 2, rect.height / 2);
+    ctx.textAlign = "left";
+  }
+
+  function formatTime(value) {
+    const d = new Date(value);
+    if (isNaN(d.getTime())) return String(value);
+
+    return d.toLocaleString([], {
+      year:"numeric",
+      month:"short",
+      day:"numeric",
+      hour:"2-digit",
+      minute:"2-digit",
+      second:"2-digit"
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value)
+      .replaceAll("&", "&amp;")
+      .replaceAll("<", "&lt;")
+      .replaceAll(">", "&gt;")
+      .replaceAll('"', "&quot;")
+      .replaceAll("'", "&#039;");
+  }
+
+  window.addEventListener("resize", function() {
+    if (latestData) renderDashboard(latestData);
+  });
+
+  loadData();
+
+  // Refresh every 5 seconds to match the ESP32 transmission interval.
+  setInterval(loadData, 5000);
+</script>
+
+</body>
+</html>
